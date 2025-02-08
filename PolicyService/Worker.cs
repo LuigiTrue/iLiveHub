@@ -1,11 +1,9 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using PolicyService.Application.Services;
-using System.Threading;
-using System.Threading.Tasks;
+using PolicyService.Domain.Entities;
+using System.Text;
+using System.Text.Json;
 
 namespace PolicyService
 {
@@ -13,6 +11,8 @@ namespace PolicyService
     {
         private readonly ILogger<Worker> _logger;
         private readonly IServiceScopeFactory _scopeFactory;
+        private IConnection? _connection;
+        private IChannel? _channel;
 
         public Worker(ILogger<Worker> logger, IServiceScopeFactory scopeFactory)
         {
@@ -20,36 +20,71 @@ namespace PolicyService
             _scopeFactory = scopeFactory;
         }
 
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        public override async Task StartAsync(CancellationToken cancellationToken)
         {
-            while (!stoppingToken.IsCancellationRequested)
+            var factory = new ConnectionFactory { HostName = "localhost" };
+            _connection = await factory.CreateConnectionAsync();
+            _channel = await _connection.CreateChannelAsync();
+            await _channel.QueueDeclareAsync(queue: "Policy", durable: false, exclusive: false, autoDelete: false, arguments: null);
+
+            var consumer = new AsyncEventingBasicConsumer(_channel);
+            consumer.ReceivedAsync += ProcessMessageAsync;
+            await _channel.BasicConsumeAsync(queue: "Policy", autoAck: true, consumer: consumer);
+        }
+
+        private async Task ProcessMessageAsync(object sender, BasicDeliverEventArgs ea)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var statementObject = ProcessReceivedMessage(ea.Body.ToArray());
+            var statementService = scope.ServiceProvider.GetRequiredService<IStatementService>();
+
+            await ExecuteServiceRequired(statementObject.Item2, statementService);
+        }
+
+        protected override Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            return Task.CompletedTask; // Não precisa de loop, o consumidor já está rodando
+        }
+
+        public (Statement?, Message) ProcessReceivedMessage(byte[] bytesMessage)
+        {
+            try
             {
-                var factory = new ConnectionFactory { HostName = "localhost" };
-                using var connection = await factory.CreateConnectionAsync();
-                using var channel = await connection.CreateChannelAsync();
+                var jsonMessage = Encoding.UTF8.GetString(bytesMessage);
+                var message = JsonSerializer.Deserialize<Message>(jsonMessage);
+                var objectMessage = message.Object;
+                return (objectMessage, message);
+            }
+            catch
+            {
+                //TODO: AQUI A MENSAGEM DEVE SER DEVOLVIDA PARA O APP
+                var message = new Message();
+                var statement = new Statement();
+                return (statement, message);
+            }
 
-                await channel.QueueDeclareAsync(queue: "hello", durable: false, exclusive: false, autoDelete: false, arguments: null);
+        }
 
-                Console.WriteLine(" [*] Waiting for messages.");
+        public async Task ExecuteServiceRequired(Message? message, IStatementService statementService)
+        {
+            if (message.IsAuthenticaded)
+            {
+                var statement = message.Object;
 
-                var consumer = new AsyncEventingBasicConsumer(channel);
-                consumer.ReceivedAsync += async (model, ea) =>
+                switch (message.ServiceID)
                 {
-                    using (var scope = _scopeFactory.CreateScope())
-                    {
-                        var statementService = scope.ServiceProvider.GetRequiredService<IStatementService>();
-                        var listTest = await statementService.GetStatement();
-
-                        foreach (var item in listTest)
-                        {
-                            Console.WriteLine(item.Title.ToString());
-                        }
-                    }
-                };
-
-                await channel.BasicConsumeAsync("hello", autoAck: true, consumer: consumer);
-                await Task.Delay(2000, stoppingToken);
+                    case 1: await statementService.GetStatement(); break;
+                    case 2: await statementService.AddStatement(statement.Status, statement.StatementType, statement.ActiveTime, statement.SectorId, statement.ReceiverType, statement.Title, statement.Content); break;
+                }
             }
         }
+
+        public override async Task StopAsync(CancellationToken cancellationToken)
+        {
+            _channel?.CloseAsync();
+            _connection?.CloseAsync();
+            await base.StopAsync(cancellationToken);
+        }
     }
+
 }

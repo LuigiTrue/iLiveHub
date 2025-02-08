@@ -11,6 +11,7 @@ namespace PolicyService.Application.Services
     }
     public class StatementService : IStatementService
     {
+        //TODO: IMPLEMETAR RESPOSTA PARA A API
         private readonly PolicyServiceDbContext _context;
 
         public StatementService(PolicyServiceDbContext context)
