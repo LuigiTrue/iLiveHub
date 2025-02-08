@@ -16,6 +16,7 @@ namespace PolicyService.Domain.Entities
 
     public class Message
     {
+        public int StatementID {get;set;}
         public int ServiceID { get; set; }
         public int UserID { get; set; }
         public bool IsAuthenticaded { get; set; } = false;

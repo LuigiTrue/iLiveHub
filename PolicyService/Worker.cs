@@ -43,7 +43,7 @@ namespace PolicyService
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            return Task.CompletedTask; // Não precisa de loop, o consumidor já está rodando
+            return Task.CompletedTask;
         }
 
         public (Statement?, Message) ProcessReceivedMessage(byte[] bytesMessage)
@@ -73,8 +73,11 @@ namespace PolicyService
 
                 switch (message.ServiceID)
                 {
-                    case 1: await statementService.GetStatement(); break;
+                    case 1: await statementService.GetAllStatements(); break;
                     case 2: await statementService.AddStatement(statement.Status, statement.StatementType, statement.ActiveTime, statement.SectorId, statement.ReceiverType, statement.Title, statement.Content); break;
+                    case 3: await statementService.GetStatementById(message.StatementID); break;
+                    case 4: await statementService.DeleteStatement(message.StatementID); break;
+                    case 5: await statementService.UpdateStatement(statement); break;
                 }
             }
         }
