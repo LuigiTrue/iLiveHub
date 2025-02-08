@@ -13,4 +13,12 @@ namespace PolicyService.Domain.Entities
         public string Title { get; set; } = string.Empty;
         public string Content { get; set; } = string.Empty;
     }
+
+    public class Message
+    {
+        public int ServiceID { get; set; }
+        public int UserID { get; set; }
+        public bool IsAuthenticaded { get; set; } = false;
+        public Statement Object { get; set; }
+    }
 }

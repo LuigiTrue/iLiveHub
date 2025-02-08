@@ -1,0 +1,15 @@
+{
+    "ServiceID": 2,
+    "UserID": 1,
+    "IsAuthenticaded": true,
+    "Object": {
+        "StatementId": 1,
+        "Status": 1,
+        "StatementType": 2,
+        "ActiveTime": "2023-10-01T12:00:00Z",
+        "SectorId": 3,
+        "ReceiverType": 4,
+        "Title": "Título do Aviso",
+        "Content": "Este é o conteúdo do aviso."
+    }
+}
